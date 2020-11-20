@@ -3,7 +3,18 @@ package com.alibaba.otter.canal.client.adapter.es7x.support;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.Map;
+
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpHost;
@@ -11,6 +22,7 @@ import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.impl.client.BasicCredentialsProvider;
+import org.apache.http.nio.conn.ssl.SSLIOSessionStrategy;
 import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
@@ -92,11 +104,47 @@ public class ESConnection {
                 final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
                 credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(nameAndPwdArr[0],
                     nameAndPwdArr[1]));
-                restClientBuilder.setHttpClientConfigCallback(httpClientBuilder -> httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider));
+                
+                TrustManager[] trustAllCerts = new TrustManager[] { new X509TrustManager() {
+    				@Override
+    				public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+    				}
+
+    				@Override
+    				public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+    				}
+
+    				@Override
+    				public X509Certificate[] getAcceptedIssuers() {
+    					return null;
+    				}
+    			} };
+    			SSLContext sc = null;
+    			try {
+    				sc = SSLContext.getInstance("SSL");
+    				sc.init(null, trustAllCerts, new SecureRandom());
+    			} catch (KeyManagementException e) {
+    				e.printStackTrace();
+    			} catch (NoSuchAlgorithmException e) {
+    				e.printStackTrace();
+    			}
+
+    			SSLIOSessionStrategy sessionStrategy = new SSLIOSessionStrategy(sc, new NullHostNameVerifier());
+                restClientBuilder.setHttpClientConfigCallback(httpClientBuilder -> {
+                	httpClientBuilder.setSSLStrategy(sessionStrategy);
+                	return httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);	
+                });
             }
             restHighLevelClient = new RestHighLevelClient(restClientBuilder);
         }
     }
+    
+    public static class NullHostNameVerifier implements HostnameVerifier {
+		@Override
+		public boolean verify(String arg0, SSLSession arg1) {
+			return true;
+		}
+	}
 
     public void close() {
         if (mode == ESClientMode.TRANSPORT) {
