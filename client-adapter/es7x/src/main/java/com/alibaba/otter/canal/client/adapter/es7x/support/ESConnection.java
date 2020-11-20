@@ -94,7 +94,7 @@ public class ESConnection {
                 String host = hosts[i];
                 int j = host.indexOf(":");
                 HttpHost httpHost = new HttpHost(InetAddress.getByName(host.substring(0, j)),
-                    Integer.parseInt(host.substring(j + 1)));
+                    Integer.parseInt(host.substring(j + 1)), "https");
                 httpHosts[i] = httpHost;
             }
             RestClientBuilder restClientBuilder = RestClient.builder(httpHosts);
